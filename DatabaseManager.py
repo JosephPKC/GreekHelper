@@ -46,7 +46,7 @@ class Handler:
         if wid is None:
             return None
         cur.execute("SELECT Definition FROM " + self.DEFINITIONS +
-                    " WHERE " + self.DEFINITIONS + ".WordID == " + str(wid[0]) + ";")
+                    " WHERE " + self.DEFINITIONS + ".WordID == " + str(wid) + ";")
         return cur.fetchall()
 
     def query_face(self, word):
@@ -208,6 +208,7 @@ class Handler:
         cur = self.__con.cursor()
         cur.execute("SELECT * FROM " + self.NAME_TO_ID +
                     " WHERE " + self.NAME_TO_ID + ".WordName == '" + name + "';")
+        #print "CHECKING NAME: ", cur.fetchone()
         return cur.fetchone() is None
 
     def __split_alts(self, word):
