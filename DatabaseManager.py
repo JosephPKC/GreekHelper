@@ -11,7 +11,7 @@ class Handler:
     WORDS = "Words"
     DEFINITIONS = "Definitions"
     VERBS = "Verbs"
-    PRINCIPLE_PARTS = "PrincipleParts"
+    PRINCIPLE_PARTS = "PrincipalParts"
     INFINITIVES = "Infinitives"
     CONJUGATIONS = "Conjugations"
     NAME_TO_ID = "NameToID"
@@ -57,8 +57,8 @@ class Handler:
             return None
         pos = self.__get_pos(word)
         if pos == "Verb":
-            cur.execute("SELECT FirstPrinciplePart, SecondPrinciplePart, ThirdPrinciplePart, "
-                        "FourthPrinciplePart, FifthPrinciplePart, SixthPrinciplePart "
+            cur.execute("SELECT FirstPrincipalPart, SecondPrincipalPart, ThirdPrincipalPart, "
+                        "FourthPrincipalPart, FifthPrincipalPart, SixthPrincipalPart "
                         "FROM " + self.PRINCIPLE_PARTS + " WHERE " +
                         self.PRINCIPLE_PARTS + ".VerbID == '" + str(wid) + "';")
             return cur.fetchone()
@@ -142,7 +142,7 @@ class Handler:
         table = self.__map_pos_to_table(pos)
         if pos == "Verb":
             cur.execute("SELECT * FROM " + table +
-                        " JOIN PrincipleParts ON " + table + ".WordID == PrincipleParts.VerbID")
+                        " JOIN PrincipalParts ON " + table + ".WordID == PrincipalParts.VerbID")
         else:
             cur.execute("SELECT * FROM " + table)
         return cur.fetchall()
@@ -210,15 +210,18 @@ class Handler:
                     " WHERE " + self.NAME_TO_ID + ".WordName == '" + name + "';")
         return cur.fetchone() is None
 
+    def __split_alts(self, word):
+        return word.split('|')
+
     # Public Insert Methods
-    def insert_verb(self, wid, verb_group, contract_group, principle_parts, infinitives, conjugations, definitions):
+    def insert_verb(self, wid, verb_group, contract_group, principal_parts, infinitives, conjugations, definitions):
         """ Inserts a Verb into the Lexicon
         :param wid: the id of the verb [integer]
         :param verb_group: what ending group the verb is in
         (Ω or μι) [string or enum]
         :param contract_group: what contract type the verb is in
         (None, άω, έω, όω, Future Contract) [string or enum]
-        :param principle_parts: the 6 principle parts of the verb
+        :param principal_parts: the 6 principal parts of the verb
         [list of strings of size 6]
         :param infinitives: the infinitive forms of the verb
         [list of strings of size 7+]
@@ -239,15 +242,15 @@ class Handler:
         # Insert into Verbs
         cur.execute("INSERT INTO " + self.VERBS +
                     " VALUES(" + str(wid) + ",'" + verb_group + "','" + contract_group + "');")
-        # Insert into PrincipleParts
+        # Insert into PrincipalParts
         cur.execute("INSERT INTO " + self.PRINCIPLE_PARTS +
                     " VALUES(" + str(wid) + ",'" +
-                    principle_parts[0] + "','" +
-                    principle_parts[1] + "','" +
-                    principle_parts[2] + "','" +
-                    principle_parts[3] + "','" +
-                    principle_parts[4] + "','" +
-                    principle_parts[5] + "');")
+                    principal_parts[0] + "','" +
+                    principal_parts[1] + "','" +
+                    principal_parts[2] + "','" +
+                    principal_parts[3] + "','" +
+                    principal_parts[4] + "','" +
+                    principal_parts[5] + "');")
         # Insert into Infinitives
         cur.execute("INSERT INTO " + self.INFINITIVES +
                     " VALUES(" + str(wid) + ",'" +
@@ -278,12 +281,16 @@ class Handler:
                         conjugation[5] + "');")
         # For each conjugated verb and infinitive, add each to NameToID
         for inf in infinitives:
-            cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" + inf + "'," + str(wid) + ");")
+            li = self.__split_alts(inf)
+            for w in li:
+                cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" + w + "'," + str(wid) + ");")
         for tense, conjugation in conjugations.iteritems():
             for word in conjugation:
-                if self.__check_name_uniqueness(word) and word is not "":
-                    cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
-                                word + "'," + str(wid) + ");")
+                li = self.__split_alts(word)
+                for w in li:
+                    if self.__check_name_uniqueness(w) and w is not "":
+                        cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
+                                    w + "'," + str(wid) + ");")
         self.__con.commit()
         return True
 
@@ -333,9 +340,11 @@ class Handler:
         # For each declined noun, add to NameToID
         for number, declension in declensions.iteritems():
             for word in declension:
-                if self.__check_name_uniqueness(word):
-                    cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
-                                word + "'," + str(wid) + ");")
+                li = self.__split_alts(word)
+                for w in li:
+                    if self.__check_name_uniqueness(w):
+                        cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
+                                    w + "'," + str(wid) + ");")
         self.__con.commit()
         return True
 
@@ -401,19 +410,25 @@ class Handler:
         # For each declined adj, add to NameToID
         for number, declension in m_declensions.iteritems():
             for word in declension:
-                if self.__check_name_uniqueness(word):
-                    cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
-                                word + "'," + str(wid) + ");")
+                li = self.__split_alts(word)
+                for w in li:
+                    if self.__check_name_uniqueness(w):
+                        cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
+                                    w + "'," + str(wid) + ");")
         for number, declension in f_declensions.iteritems():
             for word in declension:
-                if self.__check_name_uniqueness(word):
-                    cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
-                                word + "'," + str(wid) + ");")
+                li = self.__split_alts(word)
+                for w in li:
+                    if self.__check_name_uniqueness(w):
+                        cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
+                                    w + "'," + str(wid) + ");")
         for number, declension in n_declensions.iteritems():
             for word in declension:
-                if self.__check_name_uniqueness(word):
-                    cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
-                                word + "'," + str(wid) + ");")
+                li = self.__split_alts(word)
+                for w in li:
+                    if self.__check_name_uniqueness(w):
+                        cur.execute("INSERT INTO " + self.NAME_TO_ID + " VALUES('" +
+                                    w + "'," + str(wid) + ");")
         self.__con.commit()
         return True
 

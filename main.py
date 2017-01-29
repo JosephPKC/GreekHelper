@@ -1,6 +1,8 @@
 # -*- coding: UTF-8 -*-
 from __future__ import print_function
 import DatabaseManager as dB
+import TextFileParser as tp
+import types
 
 
 def __test__insert_verb(handle):
@@ -131,6 +133,8 @@ def __test_all(handle, pos):
 
 def __test_print(plist):
     for i in plist:
+        if isinstance(i, types.ListType) or isinstance(i, types.DictionaryType) or isinstance(i, types.TupleType):
+            __test_print(i)
         print(i, end=",")
 
 
@@ -139,6 +143,7 @@ def __test_print(plist):
 # "" indicates nothing
 # Enclitic accentuation may change, so keep each possible one as an alternate form
 
+'''
 with dB.Handler("GreekLexicon.db") as handler:
     __test__insert_verb(handler)
     # __test_select_face(handler, "παιδεύω")
@@ -151,6 +156,12 @@ with dB.Handler("GreekLexicon.db") as handler:
     __test_conjugate(handler,"παιδεύω", ["Perfect", "Active", "Indicative"])
     __test_decline(handler, "θεά")
     __test_all(handler,"Verb")
+'''
+
+with tp.Parser("Verbs.txt", "v") as parser:
+    verb = parser.read_verb()
+    __test_print (verb)
+
 
 
 
