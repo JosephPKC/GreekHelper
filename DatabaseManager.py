@@ -3,6 +3,185 @@
 import sqlite3 as sql
 
 
+# Class that handles queries to the lexicon
+class Lexicon:
+    __conn = None
+    __current_id = 0
+
+    NOUN = 0
+    VERB = 1
+    ADJECTIVE = 2
+    PRONOUN = 3
+    PARTICIPLE = 4
+    ADVERB = 5
+    PREPOSITION = 6
+    CONJUNCTION = 7
+    PARTICLE = 8
+    ARTICLE = 9
+
+    WORD_TABLE = "Words"
+    NOUN_TABLE = "Nouns"
+    WORD_FORM_TABLE = "WordForms"
+    NOUN_FORM_TABLE = "NounForms"
+
+    def __init__(self, db_path):
+        try:
+            self.__conn = sql.connect(db_path)
+            self.__conn.text_factory = lambda x: str(x, "utf-8")
+            self.__conn.text_factory = str
+        except sql.Error, e:
+            print "Error %s: " % e.args[0]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self.__conn:
+            self.__conn.close()
+
+    def insert(self, word, pos, form=None, is_form=False):
+        # is_form will tell us whether it is a specific word, or a word form.
+        if pos == self.NOUN:  # Nouns
+            print "Inserting noun"
+            self.__insert_noun_form(word) if is_form else self.__insert_noun(word, form)
+        elif pos == self.VERB:  # Verbs
+            print "Inserting verb"
+        elif pos == self.ADJECTIVE:  # Adjectives
+            print "Inserting adjective"
+        elif pos == self.PRONOUN:  # Pronouns
+            print "Inserting pronoun"
+        else:  # Others
+            print "Inserting other words"
+
+    def __insert_noun(self, noun, form):
+        # Noun is a container that holds everything...
+        # It is a list, where each index is an info parameter
+        # So it has:
+            # 0: Word String
+            # 1: Case
+            # 2: Number
+            # 3: Gender
+
+        # Check if the Word Form exists --This must exist, or else fail
+        form_id = self.__get_form_id_noun(form)
+        if form_id is None:
+            return False
+
+        # Get the next local ID (the max value of local IDs for the Form ID
+        word_id = self.__get_local_id(form_id)
+
+        # Insert into Words --Name, Local Id, Form Id, Part of Speech
+        self.__sql_insert_words(noun[0], word_id, form_id, self.NOUN)
+
+        # Insert into Nouns -- Local ID, Form ID, 1, 2, 3 of Noun[]
+        self.__sql_insert_nouns(self, word_id, form_id, noun[1], noun[2], noun[3])
+
+        return True
+
+    def __insert_noun_form(self, noun):
+        # Noun has:
+            # 0: Nominative Word
+            # 1: Genitive Word
+            # 2: Article
+            # 3: Gender
+            # 4: Major Declension
+            # 5: Minor Declension
+            # 6: Irregularity
+
+        # Check if the Word Form exists --it shouldn't exist or else we are re-adding
+        form_id = self.__get_form_id_noun(noun[:3])
+        if form_id is not None:
+            return False
+
+        # Get the next Form ID
+        form_id = self.__get_next_form_id()
+
+        # Insert into WordForms --FormID, pos
+        self.__sql_insert_word_forms(form_id, self.NOUN)
+
+        # Insert into NounForms --Nominative, Genitive, Article, Gender, Dec, Dec2, Irr
+        self.__sql_insert_noun_forms(form_id, noun[0], noun[1], noun[2], noun[3], noun[4], noun[5], noun[6])
+
+        return True
+
+    # Select Query Helpers
+    # Form ID Select Methods
+    def __get_form_id(self, form, pos):
+        if pos == self.NOUN:  # Nouns
+            print "Get Form ID of a noun"
+            return self.__get_form_id_noun(form)
+        elif pos == self.VERB:  # Verbs
+            print "Get Form ID of a verb"
+        elif pos == self.ADJECTIVE:  # Adjectives
+            print "Get Form ID of an adjective"
+        elif pos == self.PRONOUN:  # Pronouns
+            print "Get Form ID of a pronoun"
+        else:  # Others
+            print "Get Form ID of another word"
+
+    def __get_form_id_noun(self, form):
+        cur = self.__conn.cursor()
+        cur.execute("SELECT * FROM " + self.NOUN_FORM_TABLE + " WHERE " +
+                    self.NOUN_FORM_TABLE + ".Nominative == " + form[0] +
+                    self.NOUN_FORM_TABLE + ".Genitive == " + form[1] +
+                    self.NOUN_FORM_TABLE + ".Article == " + form[2] + ";")
+        data = cur.fetchone()  # There should be only one form or None
+        return data[0] if data is not None else None
+
+    # Word ID Select Method
+    def __get_local_id(self, form_id):
+        cur = self.__conn.cursor()
+        cur.execute("SELECT MAX(WordID) FROM " + self.WORD_TABLE + " WHERE " +
+                    self.WORD_TABLE + ".FormID == " + str(form_id) + ";")
+        data = cur.fetchone()  # There should be only one
+        return data[0] + 1 if data is not None else 0
+
+    # Next Form ID Select Method
+    def __get_next_form_id(self):
+        cur = self.__conn.cursor()
+        cur.execute("SELECT MAX(FormID) FROM " + self.WORD_FORM_TABLE + ";")
+        data = cur.fetchone()
+        return data[0] + 1 if data is not None else 0
+
+    # SQL Insert Methods
+    def __sql_insert_words(self, name, word_id, form_id, pos):
+        cur = self.__conn.cursor()
+        cur.execute("INSERT INTO " + self.WORD_TABLE + " VALUES( " +
+                    name + ", " +
+                    word_id + ", " +
+                    form_id + ", " +
+                    pos + ");")
+
+    def __sql_insert_nouns(self, word_id, form_id, case, number, gender):
+        cur = self.__conn.cursor()
+        cur.execute("INSERT INTO " + self.NOUN_TABLE + " VALUES( " +
+                    word_id + ", " +
+                    form_id + ", " +
+                    case + ", " +
+                    number + ", " +
+                    gender + ");")
+
+    def __sql_insert_word_forms(self, form_id, pos):
+        cur = self.__conn.cursor()
+        cur.execute("INSERT INTO " + self.WORD_TABLE + " VALUES( " +
+                    form_id + ", " +
+                    pos + ");")
+
+    def __sql_insert_noun_forms(self, form_id, nominative, genitive, article, gender, major, minor, irr):
+        cur = self.__conn.cursor()
+        cur.execute("INSERT INTO " + self.NOUN_TABLE + " VALUES( " +
+                    form_id + ", " +
+                    nominative + ", " +
+                    genitive + ", " +
+                    article + ", " +
+                    gender + ", " +
+                    major + ", " +
+                    minor + ", " +
+                    irr + ");")
+
+# Old Handler Class
+# Here for reference
+'''
 # Class to handle the Greek Lexicon Database.
 # This includes querying, inserting, and modifying data.
 class Handler:
@@ -433,3 +612,4 @@ class Handler:
         self.__con.commit()
         return True
 
+'''
