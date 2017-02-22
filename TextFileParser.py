@@ -4,17 +4,24 @@ import io
 
 class Parser:
     __fi = None
-    __mode = "v"
+    VERB = "VERB"
+    NOUN = "NOUN"
+    ADJECTIVE = "ADJECTIVE"
+    PRONOUN = "PRONOUN"
+    PARTICIPLE = "PARTICIPLE"
+    PREPOSITION = "PREPOSITION"
+    ADVERB = "ADVERB"
+    CONJUNCTION = "CONJUNCTION"
+    PARTICLE = "PARTICLE"
+    MISC = "MISC"
 
-    def __init__(self, file_name, mode):
+    def __init__(self, file_name):
         # Try to open the file
         try:
             self.__fi = io.open(file_name, 'r', encoding='utf8')
         except IOError:
             print "Could not open file!"
             self.__fi = None
-        finally:
-            self.__mode = mode
 
     def __enter__(self):
         return self
@@ -24,11 +31,235 @@ class Parser:
             self.__fi.close()
 
     def read_one_word(self):
+        # Ignore lines that begin with # -- comments
+        # Ignore empty lines
+        # Form of the word --denotes what part of speech it is
+
+        mode, n, w, c = self.__read_mode()
         if self.__fi is None:
             return None
-        if self.__mode == "v":
-            return self.read_verb()
+        elif mode == self.VERB:
+            return self.__read_verb(n, w, c)
+        elif mode == self.NOUN:
+            return self.__read_noun(n, w, c)
+        elif mode == self.ADJECTIVE:
+            return self.__read_adj(n, w, c)
+        elif mode == self.PRONOUN:
+            return self.__read_pro(n, w, c)
+        elif mode == self.PARTICIPLE:
+            return self.__read_part(w)
+        else:
+            return self.__read_misc(n, w, c, mode)
 
+    def __read_mode(self):
+        # Read in the first line --
+        # Part of Speech, N, W, C
+        line = self.__get_line(',')
+        return line[0], line[1], line[2], line[3]
+
+    def __read_verb(self, n, w, c):
+        # Format:
+        # Verb Form should come first
+        # Principal Parts, delimited by , (There should be 6 parts)
+        # Types, delimited by , (Ending, Aorist, Perfect, Irr)
+        # N lines of definitions (takes the entire string, except the terminating carriage return)
+        # Each Verb that follows the preceding form comes next (W of them)
+        # Word String -- The actual word
+        # Form Info delimited by , --Person (1, 2, 3, -) Number (S, D, P, -)
+        # Tense (Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect)
+        # Voice (Active, Middle, Passive),
+        # Mood (Infinitive, Indicative, Imperative, Subjunctive, Optative, Participle)
+        form = [c]
+        words = {}
+        # Read in Form
+        # Read in Six Principal Parts
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for p in line:
+            form.append(p)
+
+        # Read in Types
+        self.__load_types(form)
+
+        # Read in Definitions
+        self.__load_defs(n, form)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __read_noun(self, n, w, c):
+        # Format:
+        # Noun Form should come first
+        # Nominative, Genitive, Article -- Form
+        # Major, Minor, Gender, 0/1 for Irregularity
+        # N lines of definitions
+        # (W Noun Words)
+        # Word String
+        # Case, Number, Gender
+        form = [c]
+        words = {}
+        # Read in Form
+        # Read in N, G, A
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for f in line:
+            form.append(f)
+
+        # Read in Types
+        self.__load_types(form)
+
+        # Read in Definitions
+        self.__load_defs(n, form)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __read_adj(self, n, w, c):
+        # N -- number of definitions, W
+        # ADJ
+        # Masculine, Feminine or -, Neuter
+        # Major, Minor, 0/1 Irregularity
+        # N definitions
+        # W words
+        # Word String
+        # Case, Number, Gender
+        form = [c]
+        words = {}
+        # Read in Form
+        # Read in M, F, N
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for p in line:
+            form.append(p)
+
+        # Read in Types
+        self.__load_types(form)
+
+        # Read in Definitions
+        self.__load_defs(n, form)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __read_pro(self, n, w, c):
+        # Masculine, Feminine, Neuter
+        # Person, Type
+        # N definitions
+        # W words
+        # Word String
+        # Case, Number, Gender, Person
+        form = [c]
+        words = {}
+        # Read in Form
+        # Read in M, F, N
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for p in line:
+            form.append(p)
+
+        # Read in Types
+        self.__load_types(form)
+
+        # Read in Definitions
+        self.__load_defs(n, form)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __read_part(self, w):
+        # Six Principal Parts
+        # W
+        # Word String
+        # Case, Number, Gender, Tense, Voice
+        form = []
+        words = {}
+        # Read in Form
+        # Read in M, F, N
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for p in line:
+            form.append(p)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __read_misc(self, n, w, c, p):
+        # W are alternate forms
+        # N Definitions
+        # W Word String
+        form = [c]
+        words = {}
+        # Read in Form
+        # Read in Primary Word String
+        line = self.__get_line()
+        if len(line) == 0:
+            return False
+        for p in line:
+            form.append(p)
+
+        # Read in Definitions
+        self.__load_defs(n, form)
+
+        # Read in Words
+        self.__load_words(w, words)
+
+        return form, words
+
+    def __get_line(self, d=None):
+        line = "#"
+        # Ignore lines that begin with # (indicates a comment)
+        # Ignore empty lines
+        while True:
+            line = self.__fi.readline()
+            if len(line) == 0:  # End of file?
+                break
+            if line[0] != '#':  # Not a comment
+                break
+        if d is None:
+            return line.rstrip('\n')
+        else:
+            return line.rstrip('\n').split(d)
+
+    def __load_defs(self, n, f):
+        for i in range(n):
+            line = self.__get_line()
+            if len(line) == 0:
+                return False
+            f.append(line)
+
+    def __load_words(self, w, f):
+        for i in range(w):
+            wo = self.__get_line()
+            if len(wo) == 0:
+                return False
+            line = self.__get_line(",")
+            if len(line) == 0:
+                return False
+            f[wo] = line
+
+    def __load_types(self, f):
+        line = self.__get_line(",")
+        if len(line) == 0:
+            return False
+        for t in line:
+            f.append(t)
+
+'''
     def read_verb(self):
         # Verbs need to be in a specific format
         # Format: Each aspect of feature of the verb is on its own line
@@ -137,4 +368,4 @@ class Parser:
             if line[0] != '#': # Not a comment
                 break
         return line.rstrip('\n')
-
+'''

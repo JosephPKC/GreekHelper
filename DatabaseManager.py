@@ -244,14 +244,84 @@ class Lexicon:
 
         return True
 
-
     def __insert_pronoun(self, pro, form):
+        # Pronoun
+            # 0: Word String
+            # 1: Case
+            # 2: Number
+            # 3: Gender
+            # 4: Person
+
+        # Check for Word Form
+        form_id = self.__get_form_id(form, self.PRONOUN)
+        if form_id is None:
+            return False
+
+        # Get next local ID
+        word_id = self.__get_local_id(form_id)
+
+        # Insert into Words
+        self.__sql_insert_words(pro[0], word_id, form_id, self.ADJ)
+
+        # Insert into Adjectives
+        self.__sql_insert_adj(word_id, form_id, pro[1], pro[2], pro[3], pro[4])
+
+        return True
 
     def __insert_pronoun_form(self, pro):
+        # Pronoun Form
+            # 0: Masculine
+            # 1: Feminine
+            # 2: Neuter
+            # 3: Person
+            # 4: Type
+            # 5: Definitions
+
+        # Check for Word Form
+        form_id = self.__get_form_id(pro[:3], self.PRONOUN)
+        if form_id is not None:
+            return False
+
+        # Get next Form ID
+        form_id = self.__get_next_form_id()
+
+        # Insert into Word Forms
+        self.__sql_insert_word_forms(form_id, self.PRONOUN)
+
+        # Insert into Adj Forms
+        self.__sql_insert_adj_forms(form_id, pro[1], pro[2], pro[3], pro[4])
+
+        # Insert into Definitions
+        definitions = pro[5]
+        for d in definitions:
+            self.__sql_insert_definition(form_id, d)
+
+        return True
 
     def __insert_participle(self, part, form):
+        # Participle
+            # 0: Word String
+            # 1: Case
+            # 2: Number
+            # 3: Gender
+            # 4: Tense
+            # 5: Voice
 
-    def __insert_participle_form(self, part):
+        # Check for Word Form
+        form_id = self.__get_form_id(form, self.PARTICIPLE)
+        if form_id is None:
+            return False
+
+        # Get next local ID
+        word_id = self.__get_local_id(form_id)
+
+        # Insert into Words
+        self.__sql_insert_words(part[0], word_id, form_id, self.PARTICIPLE)
+
+        # Insert into Adjectives
+        self.__sql_insert_adj(word_id, form_id, part[1], part[2], part[3], part[4], part[5])
+
+        return True
 
     # Select Query Helpers
     # Form ID Select Methods

@@ -21,18 +21,6 @@ def __run_tests():
         # __test_print(verb)
 
 DEFINE = "define"
-'''
-CONJUGATE - Gives the conjugation of verb
-DECLINE - Gives the declension of noun or adjective or pronoun
-INFO - Gives the info for the word: face, etc.
-DEFINE - Defines the word
-LIST - Gives a list of all words of type
-HELP - Gives a list of commands
-ADMIN - Sets the mode to Admin
-RESET - Resets a Word type (removes all) or all. Requires Admin
-UPDATE - Re-updates the database, by removing everything, and re-inserting from files. Requires Admin
-INSERT - Inserts a row into a table, manually. Requires Admin
-'''
 
 __handler = None
 
