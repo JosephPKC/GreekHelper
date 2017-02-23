@@ -1,19 +1,9 @@
 # -*- coding: utf-8 -*-
 import io
-
+import Utils
 
 class Parser:
     __fi = None
-    VERB = "VERB"
-    NOUN = "NOUN"
-    ADJECTIVE = "ADJECTIVE"
-    PRONOUN = "PRONOUN"
-    PARTICIPLE = "PARTICIPLE"
-    PREPOSITION = "PREPOSITION"
-    ADVERB = "ADVERB"
-    CONJUNCTION = "CONJUNCTION"
-    PARTICLE = "PARTICLE"
-    MISC = "MISC"
 
     def __init__(self, file_name):
         # Try to open the file
@@ -38,18 +28,18 @@ class Parser:
         mode, n, w, c = self.__read_mode()
         if self.__fi is None:
             return None
-        elif mode == self.VERB:
-            return self.__read_verb(n, w, c)
-        elif mode == self.NOUN:
-            return self.__read_noun(n, w, c)
-        elif mode == self.ADJECTIVE:
-            return self.__read_adj(n, w, c)
-        elif mode == self.PRONOUN:
-            return self.__read_pro(n, w, c)
-        elif mode == self.PARTICIPLE:
-            return self.__read_part(w)
+        elif mode == Utils.PartOfSpeech.VERB:
+            return self.__read_verb(n, w, c), mode
+        elif mode == Utils.PartOfSpeech.NOUN:
+            return self.__read_noun(n, w, c), mode
+        elif mode == Utils.PartOfSpeech.ADJECTIVE:
+            return self.__read_adj(n, w, c), mode
+        elif mode == Utils.PartOfSpeech.PRONOUN:
+            return self.__read_pro(n, w, c), mode
+        elif mode == Utils.PartOfSpeech.PARTICIPLE:
+            return self.__read_part(w), mode
         else:
-            return self.__read_misc(n, w, c, mode)
+            return self.__read_misc(n, w, c, mode), mode
 
     def __read_mode(self):
         # Read in the first line --
@@ -75,7 +65,7 @@ class Parser:
         # Read in Six Principal Parts
         line = self.__get_line(",")
         if len(line) == 0:
-            return False
+            return [], {}
         for p in line:
             form.append(p)
 
@@ -105,7 +95,7 @@ class Parser:
         # Read in N, G, A
         line = self.__get_line(",")
         if len(line) == 0:
-            return False
+            return [], {}
         for f in line:
             form.append(f)
 
@@ -135,7 +125,7 @@ class Parser:
         # Read in M, F, N
         line = self.__get_line(",")
         if len(line) == 0:
-            return False
+            return [], {}
         for p in line:
             form.append(p)
 
@@ -163,7 +153,7 @@ class Parser:
         # Read in M, F, N
         line = self.__get_line(",")
         if len(line) == 0:
-            return False
+            return [], {}
         for p in line:
             form.append(p)
 
@@ -189,7 +179,7 @@ class Parser:
         # Read in M, F, N
         line = self.__get_line(",")
         if len(line) == 0:
-            return False
+            return [], {}
         for p in line:
             form.append(p)
 
@@ -208,7 +198,7 @@ class Parser:
         # Read in Primary Word String
         line = self.__get_line()
         if len(line) == 0:
-            return False
+            return [], {}
         for p in line:
             form.append(p)
 
