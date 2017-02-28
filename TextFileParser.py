@@ -2,6 +2,7 @@
 import io
 import Utils
 
+
 class Parser:
     __fi = None
 
@@ -20,14 +21,25 @@ class Parser:
         if self.__fi:
             self.__fi.close()
 
-    def read_one_word(self):
+    def read(self):
+        form, words, mode = self.__read_one_word()
+
+        if len(form) == 0 or len(words) == 0 or mode is None:
+            return form, words, mode, False
+        else:
+            return form, words, mode, True
+
+    def __read_one_word(self):
         # Ignore lines that begin with # -- comments
         # Ignore empty lines
         # Form of the word --denotes what part of speech it is
+        if self.__fi is None:
+            return [], {}, None
 
         mode, n, w, c = self.__read_mode()
-        if self.__fi is None:
-            return None
+        if mode is None:
+            return [], {}, None
+
         elif mode == Utils.PartOfSpeech.VERB:
             return self.__read_verb(n, w, c), mode
         elif mode == Utils.PartOfSpeech.NOUN:
@@ -45,7 +57,7 @@ class Parser:
         # Read in the first line --
         # Part of Speech, N, W, C
         line = self.__get_line(',')
-        return line[0], line[1], line[2], line[3]
+        return (line[0], line[1], line[2], line[3]) if len(line) > 3 else None, None, None, None
 
     def __read_verb(self, n, w, c):
         # Format:

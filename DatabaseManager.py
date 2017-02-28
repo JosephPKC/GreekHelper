@@ -27,7 +27,8 @@ class Lexicon:
             self.__conn = sql.connect(db_path)
             self.__conn.text_factory = lambda x: str(x, "utf-8")
             self.__conn.text_factory = str
-            cur = self.__conn.cursor("PRAGMA foreign_keys = 1;")
+            cur = self.__conn.cursor()
+            cur.execute("PRAGMA foreign_keys = 1;")
             self.__conn.commit()
             cur.execute("")
         except sql.Error, e:
@@ -43,8 +44,8 @@ class Lexicon:
     def reset(self):
         # Erase everything in the database
         cur = self.__conn.cursor()
-        cur.execute("DELETE * FROM WordForms;")
-        cur.execute("DELETE * FROM Words;")
+        cur.execute("DELETE FROM WordForms;")
+        cur.execute("DELETE FROM Words;")
         self.__conn.commit()
 
     def insert(self, word, pos, form=None, is_form=False):

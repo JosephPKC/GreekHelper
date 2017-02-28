@@ -1,0 +1,7 @@
+# VERBS
+# Number of Words should be at maximum of 6 * # Indicatives  + 4 * # Imperatives + # Infinitives
+# Tenses: Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect
+# Voices: Active, Middle, Passive
+# Moods: Infinitive, Indicative, Imperative, Subjunctive, Optative
+# ΠΑΙΔΕΥΩ - Teach, Educate
+Verb,2,12

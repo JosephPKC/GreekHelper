@@ -1,27 +1,29 @@
+from __future__ import print_function
 import DatabaseManager as dB
 import TextFileParser as tp
-# from __future__ import print_function
-from enum import Enum
 
-
-class Error(Enum):
-    unknown_command = 0
-
-
-class Command(Enum):
-    DEFINE = ["define", "def", "d"]
-    FORM = ["form", "fo", "f"]
-    LIST = ["list", "li", "l"]
-    UPDATE = ["update", "up", "u"]
-    HELP = ["help", "h", "?"]
-    QUIT = ["quit", "q"]
-
+# selfs are of the following form:
+# self -(Parameters) (Arguments)
 
 class LexiconSearcher:
     __lexicon = None
     __name = None
 
     __FILE_NAME = "Lexicon.txt"
+    __PARAM_INDICATOR = "-"
+    
+    UNKNOWN_COMMAND = 0
+    BAD_INSERT = 1
+
+    INFO = ["info", "i"]
+    LIST = ["list", "li", "l"]
+    UPDATE = ["update", "up", "u"]
+    HELP = ["help", "h", "?"]
+    QUIT = ["quit", "q"]
+    
+    FORM = ["form", "fo", "f"]
+    DEFINE = ["define", "def", "d"]
+    UNACCENTED = ["unaccent", "u"]
 
     def __init__(self, database_name):
         self.__name = database_name
@@ -31,57 +33,72 @@ class LexiconSearcher:
 
     def __exit__(self, exc_type, exc_value, traceback):
         if self.__lexicon:
-            self.__lexicon.__exit__()
+            self.__lexicon.__exit__(exc_type, exc_value, traceback)
 
     # Run the searcher main loop
     def run_searcher(self):
         with dB.Lexicon(self.__name) as self.__lexicon:
             inp = self.__get_user_input()
-            self.parse_user_input(inp)
-
-    def __error(self, e, c, args):
-        if e == Error.unknown_command:
-            print "Unknown command: ", c, ". Type Help or ? for a list of available commands."
-        else:
-            print "Unknown error: ", e, "."
+            self.__parse_user_input(inp)
 
     def __get_user_input(self):
-        return raw_input(">")
+        return raw_input("> ")
 
     def __parse_user_input(self, inp):
-        ins = inp.split()
-        self.__execute_command(ins[0], ins[1:])
+        inps = inp.split()
+        params, args = self.__get_parameters(inps[1:])
+        self.__execute_command(inps[0], params, args)
 
-    def __execute_command(self, c, args):
-        if c.lower() in Command.DEFINE:
-            r = self.__define(args[0])
-            self.__display_defs(args[0], r)
+    def __execute_command(self, cmd, params, args):
+        if cmd.lower() in self.INFO:
+            print("Info self", end="\n")
+            query = self.__info(params, args[0])  # We only require one argument
+        elif cmd.lower() in self.LIST:
+            print("List self", end="\n")
+        elif cmd.lower() in self.UPDATE:
+            print("Update self", end="\n")
+            self.__update()
+        elif cmd.lower() in self.HELP:
+            print("Help self", end="\n")
+        elif cmd.lower() in self.QUIT:
+            print("Quit self", end="\n")
         else:
-            self.__error(Error.unknown_command, c, args)
+            self.__error(self.UNKNOWN_COMMAND, cmd, args)
 
-    def __define(self, w):
-        return True
+    def __get_parameters(self, args):
+        params = []
+        index = 0
+        for i, a in enumerate(args):
+            if a[0] == self.__PARAM_INDICATOR:
+                params.append(a)
+            else:
+                index = i
+                break  # Parameters must be before arguments.
+        return params, args[index:]
+
+    def __error(self, error_code, cmd, args):
+        if error_code == self.UNKNOWN_COMMAND:
+            print("Unknown self: " + cmd + ".", end="\n")
+        elif error_code == self.BAD_INSERT:
+            print("Bad Insert.", end="\n")
+
+    def __info(self, params, word):
+
+        return ""
 
     def __update(self):
-        # Create Parser
+        self.__lexicon.reset()
         with tp.Parser(self.__FILE_NAME) as parser:
-            # Reset database
-            self.__lexicon.reset()
-            c = True
-            while c:
-                form, words, p = parser.read_one_word()
-                if not form and not words:
-                    c = False
-                else:
-                    self.__lexicon.insert(form, p, is_form=True)
-                    for w in words:
-                        self.__lexicon.insert(w, p, form)
+            form, words, part, check = parser.read()
+            while check:
+                res = self.__lexicon.insert(form, part, is_form=True)
+                if not res:
+                    self.__error(self.BAD_INSERT, None, None)
+                    break
+                res = self.__lexicon.insert(words, part, form, False)
+                if not res:
+                    self.__error(self.BAD_INSERT, None, None)
+                    break
 
-    def __display_defs(self, w, defs):
-        if defs is None:
-            print "No definitions were found for: ", w, "."
-        else:
-            print w, ":"
-            for i, d in enumerate(defs):
-                print i + 1, ": ", d
+                form, words, part, check = parser.read()
 
