@@ -1,7 +1,37 @@
 # VERBS
-# Number of Words should be at maximum of 6 * # Indicatives  + 4 * # Imperatives + # Infinitives
 # Tenses: Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect
 # Voices: Active, Middle, Passive
 # Moods: Infinitive, Indicative, Imperative, Subjunctive, Optative
+# Template:
+# Part Of Speech, Number of Definitions, Chapter Learned
+# Six Principal Parts
+# Ending (Ω, ΜΙ), Contract (Not, Future, ἀω, ἐω, ὀω), Aorist (First (Sygmatic), Second (Non-Sygmatic)), Perfect (First (Use κ), Second (Don't Use κ)), Deponent (Not, Semi, Middle, Passive), Irregular (Not, Semi, Full)
+# Every Definition:
+# Every Word in Verb:
+# Word String
+# Person (1, 2, 3, None), Number (Singular, Dual, Plural, None), Tense, Voice, Mood
 # ΠΑΙΔΕΥΩ - Teach, Educate
-Verb,2,12
+Verb,2,3
+παιδεύω,παιδεύσω,ἐπαίδευσα,πεπαἰδευκα,πεπαἰδευμαι,ἐπαιδεύθην
+Ω,Not,First,First,Not,Not
+teach, educate
+(MIDDLE) have (someone) taught
+παιδεύω
+1,Singular,Present,Active,Indicative
+παιδεύεις
+2,Singular,Present,Active,Indicative
+παιδεύει
+3,Singular,Present,Active,Indicative
+παιδεύετον
+2,Dual,Present,Active,Indicative
+παιδεύετον
+3,Dual,Present,Active,Indicative
+παιδεύομεν
+1,Plural,Present,Active,Indicative
+παιδεύετε
+2,Plural,Present,Active,Indicative
+παιδεύουσι
+3,Plural,Present,Active,Indicative
+παιδεύουσιν
+3,Plural,Present,Active,Indicative
+!

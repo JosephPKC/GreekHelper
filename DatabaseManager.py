@@ -53,25 +53,23 @@ class Lexicon:
         if is_form and form is None:
             print "Form is required when inserting an individual word."
             return False
-        if pos == Utils.PartOfSpeech.NOUN:  # Nouns
+        if pos == Utils.PartOfSpeech.NOUN.value:  # Nouns
             print "Inserting noun"
             return self.__insert_noun_form(word) if is_form else self.__insert_noun(word, form)
-        elif pos == Utils.PartOfSpeech.VERB:  # Verbs
+        elif pos == Utils.PartOfSpeech.VERB.value:  # Verbs
             print "Inserting verb"
             return self.__insert_verb_form(word) if is_form else self.__insert_verb(word, form)
-        elif pos == Utils.PartOfSpeech.ADJECTIVE:  # Adjectives
+        elif pos == Utils.PartOfSpeech.ADJECTIVE.value:  # Adjectives
             print "Inserting adjective"
             return self.__insert_adj_form(word) if is_form else self.__insert_adj(word, form)
-        elif pos == Utils.PartOfSpeech.PRONOUN:  # Pronouns
+        elif pos == Utils.PartOfSpeech.PRONOUN.value:  # Pronouns
             print "Inserting pronoun"
             return self.__insert_pronoun_form(word) if is_form else self.__insert_pronoun(word, form)
-        elif pos == Utils.PartOfSpeech.PARTICIPLE:
+        elif pos == Utils.PartOfSpeech.PARTICIPLE.value:
             print "Inserting participle"
             return False if is_form else self.__insert_participle(word, form)
         else:  # Others
             print "Inserting other words"
-
-        self.__conn.commit()
 
     def __insert_noun(self, noun, form):
         # Noun is a container that holds everything...
@@ -95,7 +93,7 @@ class Lexicon:
 
         # Insert into Nouns -- Local ID, Form ID, 1, 2, 3 of Noun[]
         self.__sql_insert_nouns(word_id, form_id, noun[1], noun[2], noun[3])
-
+        self.__conn.commit()
         return True
 
     def __insert_noun_form(self, noun):
@@ -127,7 +125,7 @@ class Lexicon:
         definitions = noun[7]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
-
+        self.__conn.commit()
         return True
 
     def __insert_verb(self, verb, form):
@@ -144,15 +142,13 @@ class Lexicon:
         if form_id is None:
             return False
 
-        # Get next local ID
-        word_id = self.__get_local_id(form_id)
+        for v, i in verb.iteritems():
+            # Get next local ID
 
-        # Insert into Words
-        self.__sql_insert_words(word_id, form_id, Utils.PartOfSpeech.VERB)
-
-        # Insert into Nouns
-        self.__sql_insert_verbs(word_id, form_id, verb[1], verb[2], verb[3], verb[4], verb[5])
-
+            word_id = self.__get_local_id(form_id)
+            self.__sql_insert_words(v, word_id, form_id, Utils.PartOfSpeech.VERB)
+            self.__sql_insert_verbs(word_id, form_id, i[0], i[1], i[2], i[3], i[4])
+        self.__conn.commit()
         return True
 
     def __insert_verb_form(self, verb):
@@ -179,18 +175,17 @@ class Lexicon:
         form_id = self.__get_next_form_id()
 
         # Insert into Word Forms
-        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.VERB)
-
+        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.VERB, verb[12])
         # Insert into Verb Forms
         self.__sql_insert_verb_forms(form_id, verb[0], verb[1], verb[2], verb[3],
                                      verb[4], verb[5], verb[6], verb[7], verb[8],
-                                     verb[9], verb[10])
+                                     verb[9], verb[10], verb[11])
 
         # Insert into Definitions
         definitions = verb[11]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
-
+        self.__conn.commit()
         return True
 
     def __insert_adj(self, adj, form):
@@ -213,7 +208,7 @@ class Lexicon:
 
         # Insert into Adjectives
         self.__sql_insert_adj(word_id, form_id, adj[1], adj[2], adj[3])
-
+        self.__conn.commit()
         return True
 
     def __insert_adj_form(self, adj):
@@ -244,7 +239,7 @@ class Lexicon:
         definitions = adj[7]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
-
+        self.__conn.commit()
         return True
 
     def __insert_pronoun(self, pro, form):
@@ -268,7 +263,7 @@ class Lexicon:
 
         # Insert into Adjectives
         self.__sql_insert_pro(word_id, form_id, pro[1], pro[2], pro[3], pro[4])
-
+        self.__conn.commit()
         return True
 
     def __insert_pronoun_form(self, pro):
@@ -298,7 +293,7 @@ class Lexicon:
         definitions = pro[5]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
-
+        self.__conn.commit()
         return True
 
     def __insert_participle(self, part, form):
@@ -323,7 +318,7 @@ class Lexicon:
 
         # Insert into Adjectives
         self.__sql_insert_part(word_id, form_id, part[1], part[2], part[3], part[4], part[5])
-
+        self.__conn.commit()
         return True
 
     # Select Query Helpers
@@ -356,12 +351,12 @@ class Lexicon:
     def __get_form_id_verb(self, form):
         cur = self.__conn.cursor()
         cur.execute("SELECT * FROM " + self.VERB_FORM_TABLE + " WHERE " +
-                    self.VERB_FORM_TABLE + ".First == " + form[0] + " AND " +
-                    self.VERB_FORM_TABLE + ".Second == " + form[1] + " AND " +
-                    self.VERB_FORM_TABLE + ".Third == " + form[2] + " AND " +
-                    self.VERB_FORM_TABLE + ".Fourth == " + form[3] + " AND " +
-                    self.VERB_FORM_TABLE + ".Fifth == " + form[4] + " AND " +
-                    self.VERB_FORM_TABLE + ".Sixth == " + form[5] + ";")
+                    self.VERB_FORM_TABLE + ".FirstPrincipalPart == '" + form[0] + "' AND " +
+                    self.VERB_FORM_TABLE + ".SecondPrincipalPart == '" + form[1] + "' AND " +
+                    self.VERB_FORM_TABLE + ".ThirdPrincipalPart == '" + form[2] + "' AND " +
+                    self.VERB_FORM_TABLE + ".FourthPrincipalPart == '" + form[3] + "' AND " +
+                    self.VERB_FORM_TABLE + ".FifthPrincipalPart == '" + form[4] + "' AND " +
+                    self.VERB_FORM_TABLE + ".SixthPrincipalPart == '" + form[5] + "';")
         data = cur.fetchone()  # There should be only one form or None
         return data[0] if data is not None else None
 
@@ -389,29 +384,30 @@ class Lexicon:
         cur.execute("SELECT MAX(WordID) FROM " + self.WORD_TABLE + " WHERE " +
                     self.WORD_TABLE + ".FormID == " + str(form_id) + ";")
         data = cur.fetchone()  # There should be only one
-        return data[0] + 1 if data is not None else 0
+        return data[0] + 1 if data[0] is not None else 0
 
     # Next Form ID Select Method
     def __get_next_form_id(self):
         cur = self.__conn.cursor()
         cur.execute("SELECT MAX(FormID) FROM " + self.WORD_FORM_TABLE + ";")
         data = cur.fetchone()
-        return data[0] + 1 if data is not None else 0
+        return (data[0] + 1) if data[0] is not None else 0
 
     # SQL Insert Methods
     def __sql_insert_definition(self, form_id, definition):
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.DEF_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    definition + ");")
+                    str(form_id) + ", '" +
+                    definition + "');")
 
     def __sql_insert_words(self, name, word_id, form_id, pos):
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.WORD_TABLE + " VALUES( " +
-                    name + ", " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    pos + ");")
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    pos.value + "', '" +
+                    name + "', '" +
+                    self.__deaccentuate(name) + "');")
 
     def __sql_insert_nouns(self, word_id, form_id, case, number, gender):
         cur = self.__conn.cursor()
@@ -425,13 +421,13 @@ class Lexicon:
     def __sql_insert_verbs(self, word_id, form_id, person, number, tense, voice, mood):
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.VERB_TABLE + " VALUES( " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    person + ", " +
-                    number + ", " +
-                    tense + ", " +
-                    voice + ", " +
-                    mood + ", " + ");")
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    person + "', '" +
+                    number + "', '" +
+                    tense + "', '" +
+                    voice + "', '" +
+                    mood + "');")
 
     def __sql_insert_adj(self, word_id, form_id, case, number, gender):
         cur = self.__conn.cursor()
@@ -464,11 +460,13 @@ class Lexicon:
                     tense + ", " +
                     voice + ", " + ");")
 
-    def __sql_insert_word_forms(self, form_id, pos):
+    def __sql_insert_word_forms(self, form_id, pos, c):
         cur = self.__conn.cursor()
+
         cur.execute("INSERT INTO " + self.WORD_FORM_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    pos + ");")
+                    str(form_id) + ", '" +
+                    pos.value + "', " +
+                    str(c) + ");")
 
     def __sql_insert_noun_forms(self, form_id, nominative, genitive, article, gender, major, minor, irr):
         cur = self.__conn.cursor()
@@ -482,21 +480,22 @@ class Lexicon:
                     minor + ", " +
                     irr + ");")
 
-    def __sql_insert_verb_forms(self, form_id, first, second, third, fourth, fifth, sixth, ending, contract, aorist, perfect, irr):
+    def __sql_insert_verb_forms(self, form_id, first, second, third, fourth, fifth, sixth, ending, contract, aorist, perfect, deponent, irr):
         cur = self.__conn.cursor()
-        cur.execute("INSERT INTO " + self.VERB_FORM_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    first + ", " +
-                    second + ", " +
-                    third + ", " +
-                    fourth + ", " +
-                    fifth + ", " +
-                    sixth + ", " +
-                    ending + ", " +
-                    contract + ", " +
-                    aorist + ", " +
-                    perfect + ", " +
-                    irr + ");")
+        cur.execute("INSERT INTO " + self.VERB_FORM_TABLE + " VALUES( '" +
+                    str(form_id) + "', '" +
+                    first + "', '" +
+                    second + "', '" +
+                    third + "', '" +
+                    fourth + "', '" +
+                    fifth + "', '" +
+                    sixth + "', '" +
+                    ending + "', '" +
+                    contract + "', '" +
+                    aorist + "', '" +
+                    perfect + "', '" +
+                    deponent + "', '" +
+                    irr + "');")
 
     def __sql_insert_adj_forms(self, form_id, masculine, feminine, neuter, major, minor, irr):
         cur = self.__conn.cursor()
@@ -519,6 +518,8 @@ class Lexicon:
                     person + ", " +
                     irr + ");")
 
+    def __deaccentuate(self, word):
+        return word # Change each accented (including breathing marks) letters into unaccented versions. If there is a standalone accent, leave as is
 
 # Old Handler Class
 # Here for reference

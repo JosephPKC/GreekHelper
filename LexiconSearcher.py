@@ -91,7 +91,7 @@ class LexiconSearcher:
         with tp.Parser(self.__FILE_NAME) as parser:
             form, words, part, check = parser.read()
             while check:
-                res = self.__lexicon.insert(form, part, is_form=True)
+                res = self.__lexicon.insert(form, part, form, is_form=True)
                 if not res:
                     self.__error(self.BAD_INSERT, None, None)
                     break

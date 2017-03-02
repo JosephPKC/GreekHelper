@@ -22,8 +22,12 @@ class Parser:
             self.__fi.close()
 
     def read(self):
-        form, words, mode = self.__read_one_word()
-
+        w, mode = self.__read_one_word()
+        form = w[0]
+        if len(w) == 2:
+            words = w[1]
+        else:
+            words = None
         if len(form) == 0 or len(words) == 0 or mode is None:
             return form, words, mode, False
         else:
@@ -34,32 +38,36 @@ class Parser:
         # Ignore empty lines
         # Form of the word --denotes what part of speech it is
         if self.__fi is None:
-            return [], {}, None
+            return ([], {}), None
 
-        mode, n, w, c = self.__read_mode()
-        if mode is None:
-            return [], {}, None
+        mode, n, c = self.__read_mode()
+        if mode is None or n is None or c is None:
+            return ([], {}), None
+        n = int(n)
 
-        elif mode == Utils.PartOfSpeech.VERB:
-            return self.__read_verb(n, w, c), mode
-        elif mode == Utils.PartOfSpeech.NOUN:
-            return self.__read_noun(n, w, c), mode
-        elif mode == Utils.PartOfSpeech.ADJECTIVE:
-            return self.__read_adj(n, w, c), mode
-        elif mode == Utils.PartOfSpeech.PRONOUN:
-            return self.__read_pro(n, w, c), mode
-        elif mode == Utils.PartOfSpeech.PARTICIPLE:
-            return self.__read_part(w), mode
+        if mode == Utils.PartOfSpeech.VERB.value:
+            return self.__read_verb(n, c), mode
+        elif mode == Utils.PartOfSpeech.NOUN.value:
+            return self.__read_noun(n, c), mode
+        elif mode == Utils.PartOfSpeech.ADJECTIVE.value:
+            return self.__read_adj(n, c), mode
+        elif mode == Utils.PartOfSpeech.PRONOUN.value:
+            return self.__read_pro(n, c), mode
+        elif mode == Utils.PartOfSpeech.PARTICIPLE.value:
+            return self.__read_part(), mode
         else:
-            return self.__read_misc(n, w, c, mode), mode
+            return self.__read_misc(n, c, mode), mode
 
     def __read_mode(self):
         # Read in the first line --
-        # Part of Speech, N, W, C
+        # Part of Speech, N: Number of Definitions, C: Chapter
         line = self.__get_line(',')
-        return (line[0], line[1], line[2], line[3]) if len(line) > 3 else None, None, None, None
+        if len(line) > 2:
+            return str(line[0]), str(line[1]), str(line[2])
+        else:
+            return None, None, None
 
-    def __read_verb(self, n, w, c):
+    def __read_verb(self, n, c):
         # Format:
         # Verb Form should come first
         # Principal Parts, delimited by , (There should be 6 parts)
@@ -71,7 +79,7 @@ class Parser:
         # Tense (Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect)
         # Voice (Active, Middle, Passive),
         # Mood (Infinitive, Indicative, Imperative, Subjunctive, Optative, Participle)
-        form = [c]
+        form = []
         words = {}
         # Read in Form
         # Read in Six Principal Parts
@@ -84,15 +92,17 @@ class Parser:
         # Read in Types
         self.__load_types(form)
 
+        form.append(c)
+
         # Read in Definitions
         self.__load_defs(n, form)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
-    def __read_noun(self, n, w, c):
+    def __read_noun(self, n, c):
         # Format:
         # Noun Form should come first
         # Nominative, Genitive, Article -- Form
@@ -101,7 +111,7 @@ class Parser:
         # (W Noun Words)
         # Word String
         # Case, Number, Gender
-        form = [c]
+        form = []
         words = {}
         # Read in Form
         # Read in N, G, A
@@ -114,15 +124,17 @@ class Parser:
         # Read in Types
         self.__load_types(form)
 
+        form.append(c)
+
         # Read in Definitions
         self.__load_defs(n, form)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
-    def __read_adj(self, n, w, c):
+    def __read_adj(self, n, c):
         # N -- number of definitions, W
         # ADJ
         # Masculine, Feminine or -, Neuter
@@ -131,7 +143,7 @@ class Parser:
         # W words
         # Word String
         # Case, Number, Gender
-        form = [c]
+        form = []
         words = {}
         # Read in Form
         # Read in M, F, N
@@ -144,22 +156,24 @@ class Parser:
         # Read in Types
         self.__load_types(form)
 
+        form.append(c)
+
         # Read in Definitions
         self.__load_defs(n, form)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
-    def __read_pro(self, n, w, c):
+    def __read_pro(self, n, c):
         # Masculine, Feminine, Neuter
         # Person, Type
         # N definitions
         # W words
         # Word String
         # Case, Number, Gender, Person
-        form = [c]
+        form = []
         words = {}
         # Read in Form
         # Read in M, F, N
@@ -172,15 +186,17 @@ class Parser:
         # Read in Types
         self.__load_types(form)
 
+        form.append(c)
+
         # Read in Definitions
         self.__load_defs(n, form)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
-    def __read_part(self, w):
+    def __read_part(self):
         # Six Principal Parts
         # W
         # Word String
@@ -196,15 +212,15 @@ class Parser:
             form.append(p)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
-    def __read_misc(self, n, w, c, p):
+    def __read_misc(self, n, c, p):
         # W are alternate forms
         # N Definitions
         # W Word String
-        form = [c]
+        form = []
         words = {}
         # Read in Form
         # Read in Primary Word String
@@ -214,11 +230,13 @@ class Parser:
         for p in line:
             form.append(p)
 
+        form.append(c)
+
         # Read in Definitions
         self.__load_defs(n, form)
 
         # Read in Words
-        self.__load_words(w, words)
+        self.__load_words(words)
 
         return form, words
 
@@ -244,13 +262,13 @@ class Parser:
                 return False
             f.append(line)
 
-    def __load_words(self, w, f):
-        for i in range(w):
-            wo = self.__get_line()
-            if len(wo) == 0:
+    def __load_words(self, f):
+        while True:
+            wo = self.__get_line()  # Get the Word Name
+            if wo[0] == "!" or len(wo) == 0:  # Separation Between Forms/End of Form
                 return False
-            line = self.__get_line(",")
-            if len(line) == 0:
+            line = self.__get_line(",")  # Get Info on Word
+            if len(line) == 0:  # If no info
                 return False
             f[wo] = line
 
