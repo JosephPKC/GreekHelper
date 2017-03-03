@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
-import io
-import Utils
+import io       # For file operations
+import Utils    # For the Part of Speech
+from collections import defaultdict
 
 
 class Parser:
-    __fi = None
+    """
+    Parser class will parse in a text file and create usable words for inserting into the database
+    """
+    __fi = None     # File: File IO
 
+    # Constructor
     def __init__(self, file_name):
         # Try to open the file
         try:
@@ -21,66 +26,99 @@ class Parser:
         if self.__fi:
             self.__fi.close()
 
+    # Core Method
+    # Read in an entire word
     def read(self):
-        w, mode = self.__read_one_word()
-        form = w[0]
+        """
+        Try to read an entire word from the text file
+        :return: The entire word tuple: Form, Individual Words, Part of Speech, Success
+        """
+        w, mode = self.__read_one_word()  # Helper method to read in a word
+        if w is None or mode is None:
+            return None, None, None, False
+        form = w[0]  # The form is the first of w pair
         if len(w) == 2:
-            words = w[1]
+            words = w[1]  # If there is another, the words is the second
         else:
-            words = None
-        if len(form) == 0 or len(words) == 0 or mode is None:
-            return form, words, mode, False
-        else:
-            return form, words, mode, True
+            words = None  # Else, there are no Words
+        return form, words, mode, True  # Return the successfully read in word
 
+    # Helper Methods
+    # Helper method for readin in a word
     def __read_one_word(self):
-        # Ignore lines that begin with # -- comments
-        # Ignore empty lines
-        # Form of the word --denotes what part of speech it is
-        if self.__fi is None:
-            return ([], {}), None
+        """
+        Reads in an entire word
+        :return: The word (form, words), and the Part
+        """
+        if self.__fi is None:  # If there is no file, then fail
+            return None, None
 
+        # Read in the first line, which contains Part, Num of Defs, Chapter
         mode, n, c = self.__read_mode()
+        # If any of them failed to load in, then fail
         if mode is None or n is None or c is None:
-            return ([], {}), None
-        n = int(n)
+            return None, None
+        n = int(n)  # Change n to integer (because it is read as a string)
 
+        # Switch depending on the Part
+        # If Verb
         if mode == Utils.PartOfSpeech.VERB.value:
             return self.__read_verb(n, c), mode
+        # If Noun
         elif mode == Utils.PartOfSpeech.NOUN.value:
             return self.__read_noun(n, c), mode
+        # If Adjective
         elif mode == Utils.PartOfSpeech.ADJECTIVE.value:
             return self.__read_adj(n, c), mode
+        # If Pronoun
         elif mode == Utils.PartOfSpeech.PRONOUN.value:
             return self.__read_pro(n, c), mode
+        # If Participle
         elif mode == Utils.PartOfSpeech.PARTICIPLE.value:
             return self.__read_part(), mode
+        # If Adverb, Conjunction, Interjection, Correlative, Particle, or Preposition
         else:
-            return self.__read_misc(n, c, mode), mode
+            return self.__read_misc(n, c), mode
 
+    # Read in the first line, or the mode
     def __read_mode(self):
-        # Read in the first line --
+        """
+        Reads in the Part, Number of Defs, and Chapter
+        :return: Part, Number of Defs, Chapter
+        """
+        # Format:
         # Part of Speech, N: Number of Definitions, C: Chapter
         line = self.__get_line(',')
-        if len(line) > 2:
+        if len(line) == 3:  # If there is are 3 things:
             return str(line[0]), str(line[1]), str(line[2])
-        else:
+        else:  # There are things missing, or there are additional things
             return None, None, None
 
+    # Read in Methods - These methods follow the same structure. Only difference is file format
+    # Specifically reading in a verb
     def __read_verb(self, n, c):
-        # Format:
-        # Verb Form should come first
-        # Principal Parts, delimited by , (There should be 6 parts)
-        # Types, delimited by , (Ending, Aorist, Perfect, Irr)
-        # N lines of definitions (takes the entire string, except the terminating carriage return)
-        # Each Verb that follows the preceding form comes next (W of them)
-        # Word String -- The actual word
-        # Form Info delimited by , --Person (1, 2, 3, -) Number (S, D, P, -)
-        # Tense (Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect)
-        # Voice (Active, Middle, Passive),
-        # Mood (Infinitive, Indicative, Imperative, Subjunctive, Optative, Participle)
+        """
+        Reads in a Verb.
+        Format:
+        Verb Form--
+        -6 Principal Parts, delimited by comma
+        -Ending, Contract, Aorist, Perfect, Deponent, Irr Type, delimited by comma
+        -N lines of definitions
+        Individual Verbs--
+        -Word Name String
+        -Person, Number, Tense, Voice, Mood, delimited by comma
+        --Person: 1, 2, 3, None
+        --Number: Singular, Dual, Plural, None
+        --Tense: Present, Future, Imperfect, Aorist, Perfect, Pluperfect, Future Perfect
+        --Voice: Active, Middle, Passive
+        --Mood: Infinitive, Indicative, Imperative, Subjunctive, Optative
+        :param n: Number of Definitions
+        :param c: Chapter
+        :return: Form, Words
+        """
+        # Create the list and dictionary
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in Six Principal Parts
         line = self.__get_line(",")
@@ -92,7 +130,7 @@ class Parser:
         # Read in Types
         self.__load_types(form)
 
-        form.append(c)
+        form.append(c)  # Append chapter
 
         # Read in Definitions
         self.__load_defs(n, form)
@@ -102,17 +140,27 @@ class Parser:
 
         return form, words
 
+    # Read in Noun
     def __read_noun(self, n, c):
-        # Format:
-        # Noun Form should come first
-        # Nominative, Genitive, Article -- Form
-        # Major, Minor, Gender, 0/1 for Irregularity
-        # N lines of definitions
-        # (W Noun Words)
-        # Word String
-        # Case, Number, Gender
+        """
+        Read in a Noun
+        Format:
+        Noun Form--
+        -Nominative, Genitive, Article
+        -Major, Minor, Gender, Irr Type, delimited by comma
+        -N lines of Definitions
+        Individual Nouns--
+        -Word String
+        -Case, Number, Gender
+        --Case: Nominative, Genitive, Dative, Accusative, Vocative
+        --Number: Singular, Plural
+        --Gender: Masculine, Feminine, Neuter
+        :param n: Number of Defs
+        :param c: Chapter
+        :return: Form, Words
+        """
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in N, G, A
         line = self.__get_line(",")
@@ -134,17 +182,23 @@ class Parser:
 
         return form, words
 
+    # Read in Adjective
     def __read_adj(self, n, c):
-        # N -- number of definitions, W
-        # ADJ
-        # Masculine, Feminine or -, Neuter
-        # Major, Minor, 0/1 Irregularity
-        # N definitions
-        # W words
-        # Word String
-        # Case, Number, Gender
+        """
+        Format:
+        Adjective Form--
+        -Masculine, Feminine/-, Neuter (Feminine can be blank, meaning it is a two ending adjective)
+        -Major, Minor, Irr Type, delimited by comma
+        -N lines of Defs
+        Adjectives--
+        -Word String
+        -Case, Number, Gender (Same as Noun)
+        :param n: Number of Defs
+        :param c: Chapter
+        :return: Form, Words
+        """
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in M, F, N
         line = self.__get_line(",")
@@ -166,15 +220,24 @@ class Parser:
 
         return form, words
 
+    # Read in Pronoun
     def __read_pro(self, n, c):
-        # Masculine, Feminine, Neuter
-        # Person, Type
-        # N definitions
-        # W words
-        # Word String
-        # Case, Number, Gender, Person
+        """
+        Format:
+        Form--
+        -Masculine, Feminine, Neuter
+        -Person, Type
+        --Type: Demonstrative, Personal, Reflexive, Relative
+        -N lines of Defs
+        Pronoun--
+        -Word String
+        -Case, Number, Gender, Person
+        :param n: Number of Defs
+        :param c: Chapter
+        :return: Form, Words
+        """
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in M, F, N
         line = self.__get_line(",")
@@ -196,13 +259,19 @@ class Parser:
 
         return form, words
 
+    # Read Participle
     def __read_part(self):
-        # Six Principal Parts
-        # W
-        # Word String
-        # Case, Number, Gender, Tense, Voice
+        """
+        Format:
+        Form--
+        -Six Principal Parts for Verbs
+        Participle--
+        -Word String
+        -Case, Number, Gender, Tense, Voice
+        :return: Form, Words
+        """
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in M, F, N
         line = self.__get_line(",")
@@ -216,12 +285,22 @@ class Parser:
 
         return form, words
 
-    def __read_misc(self, n, c, p):
-        # W are alternate forms
-        # N Definitions
-        # W Word String
+    # Read All Others
+    def __read_misc(self, n, c):
+        """
+        Format:
+        Form--
+        -Primary Form
+        -N lines of Def
+        Misc--
+        -Alternative Forms
+        :param n: Number of Defs
+        :param c: Chapter
+        :param p:
+        :return:
+        """
         form = []
-        words = {}
+        words = defaultdict(list)
         # Read in Form
         # Read in Primary Word String
         line = self.__get_line()
@@ -240,44 +319,72 @@ class Parser:
 
         return form, words
 
+    # Get a single line
     def __get_line(self, d=None):
+        """
+        Grabs a single line, with delimiter d from the file
+        :param d: delimiter. Default is none
+        :return: Line, delimited if requested
+        """
         line = "#"
         # Ignore lines that begin with # (indicates a comment)
         # Ignore empty lines
         while True:
-            line = self.__fi.readline()
-            if len(line) == 0:  # End of file?
+            line = self.__fi.readline()  # Get a line
+            if len(line) == 0:  # If found the End of File
                 break
-            if line[0] != '#':  # Not a comment
+            if line[0] != '#':  # If found a non-comment line
                 break
-        if d is None:
+        if d is None:  # If no delimiter
             return line.rstrip('\n')
-        else:
+        else:  # If specified a delimiter
             return line.rstrip('\n').split(d)
 
+    # Load definitions
     def __load_defs(self, n, f):
-        for i in range(n):
-            line = self.__get_line()
+        """
+        Adds definitions from the file to f
+        :param n: Number of Defs
+        :param f: Where to load definitions
+        :return: Success
+        """
+        for i in range(n):  # For each supposed definition
+            line = self.__get_line()  # Get the definition line
             if len(line) == 0:
-                return False
+                return False  # If there is nothing, then fail
             f.append(line)
+        return True
 
+    # Load Words
     def __load_words(self, f):
-        while True:
+        """
+        Loads words into f
+        :param f: Where to load
+        :return: Success
+        """
+        while True:  # As long as you can...
             wo = self.__get_line()  # Get the Word Name
             if wo[0] == "!" or len(wo) == 0:  # Separation Between Forms/End of Form
-                return False
+                break  # Stop, as there are no more words
             line = self.__get_line(",")  # Get Info on Word
-            if len(line) == 0:  # If no info
-                return False
-            f[wo] = line
+            if len(line) == 0:  # If no info (There must be info directly following a word string)
+                return False  # Bad format
+            f[wo].append(line)  # Dictionary mapping a word string to its info
+        return True
 
+    # Load Types
     def __load_types(self, f):
-        line = self.__get_line(",")
-        if len(line) == 0:
+        """
+        Load types into f
+        :param f: Where to load
+        :return: Success
+        """
+        line = self.__get_line(",")  # Get a line, delimited by comma
+        if len(line) == 0:  # If the line is nothing, fail
             return False
-        for t in line:
+        for t in line:  # For each type in the line, load it
             f.append(t)
+        return True
 
 '''
     def read_verb(self):

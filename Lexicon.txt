@@ -5,7 +5,7 @@
 # Template:
 # Part Of Speech, Number of Definitions, Chapter Learned
 # Six Principal Parts
-# Ending (Ω, ΜΙ), Contract (Not, Future, ἀω, ἐω, ὀω), Aorist (First (Sygmatic), Second (Non-Sygmatic)), Perfect (First (Use κ), Second (Don't Use κ)), Deponent (Not, Semi, Middle, Passive), Irregular (Not, Semi, Full)
+# Ending (Ω, ΜΙ), Contract (Not, Future, ἀω, ἐω, ὀω), Aorist (First, Second), Perfect (First, Second), Deponent (Not, Semi, Middle, Passive), Irregular (Not, Semi, Full)
 # Every Definition:
 # Every Word in Verb:
 # Word String

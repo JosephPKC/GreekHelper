@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
-# from __future__ import unicode_literals
-import sqlite3 as sql
-import Utils
+import sqlite3 as sql  # For database operations
+import Utils           # For Part of Speech
 
 
 # Class that handles queries to the lexicon
 class Lexicon:
-    __conn = None
-    __current_id = 0
+    """
+    Lexicon handles database operations
+    """
+    __conn = None       # Connection to the database
 
+    # Constants for Table Names in the database
     DEF_TABLE = "Definitions"
     WORD_TABLE = "Words"
     NOUN_TABLE = "Nouns"
@@ -20,18 +22,30 @@ class Lexicon:
     VERB_FORM_TABLE = "VerbForms"
     ADJ_FORM_TABLE = "AdjectiveForms"
     PRO_FORM_TABLE = "PronounForms"
-    PART_FORM_TABLE = "ParticipleForms"
+    PART_TABLE = "ParticipleForms"
 
+    # Mapping of Accented to Unaccented
+    ACCENT_MAP = {
+        u"ἀἁάᾶὰἄἅἆἇἂἃ": u"α",
+        u"ἐἑέὲἔἕἒἓ": u"ε",
+        u"ἰἱίῖὶἴἵἶἷἲἳ": u"ι",
+        u"ὀὁόὸὄὅὂὃ": u"ο",
+        u"ὐὑύῦὺὔὕὖὗὒὓ": u"υ",
+        u"ἠἡήῆὴἤἥἦἧἢἣ": u"η",
+        u"ὠὡώῶὼὤὥὦὧὢὣ": u"ω",
+        u"ῤῥ": u"ρ"
+    }
+
+    # Constructor
     def __init__(self, db_path):
-        try:
-            self.__conn = sql.connect(db_path)
-            self.__conn.text_factory = lambda x: str(x, "utf-8")
+        try:  # Try to connect to the database at db_path
+            self.__conn = sql.connect(db_path)  # Connect
+            self.__conn.text_factory = lambda x: str(x, "utf-8")  # Set to UTF-8 for Greek characters
             self.__conn.text_factory = str
             cur = self.__conn.cursor()
-            cur.execute("PRAGMA foreign_keys = 1;")
+            cur.execute("PRAGMA foreign_keys = 1;")  # Set Foreign Key Constraints on (SQLite thing)
             self.__conn.commit()
-            cur.execute("")
-        except sql.Error, e:
+        except sql.Error, e:  # If there is an exception
             print "Error %s: " % e.args[0]
 
     def __enter__(self):
@@ -41,71 +55,155 @@ class Lexicon:
         if self.__conn:
             self.__conn.close()
 
+    # Core methods
+    # Reset the database
     def reset(self):
+        """
+        Erases EVERYTHING in the database (but NOT the tables)
+        :return: None
+        """
         # Erase everything in the database
         cur = self.__conn.cursor()
+        # WordForms and Words contains everything, Foreign Keys will cascade the other tables
         cur.execute("DELETE FROM WordForms;")
         cur.execute("DELETE FROM Words;")
         self.__conn.commit()
 
-    def insert(self, word, pos, form=None, is_form=False):
-        # is_form will tell us whether it is a specific word, or a word form.
-        if is_form and form is None:
-            print "Form is required when inserting an individual word."
-            return False
+    # Insert into database
+    def insert(self, pos, word=None, form=None):
+        """
+        Insert the word into the database
+        :param pos: Word to insert (or the form if just the form)
+        :param word: Part of Speech (which tables to insert to)
+        :param form: Form (Used only with Words)
+        :return: Success
+        """
+        if word is None and form is None:
+            print "Both word and form cannot be None."
+            return False  # Fail if both word and form are None (Nothing to insert)
+        if word is not None and form is None:
+            print "Form cannot be None if Word isn't."
+            return False  # Fail if word is not None, but form is
+
         if pos == Utils.PartOfSpeech.NOUN.value:  # Nouns
-            print "Inserting noun"
-            return self.__insert_noun_form(word) if is_form else self.__insert_noun(word, form)
+            return self.__insert_noun_form(form) if word is None else self.__insert_noun(word, form)
         elif pos == Utils.PartOfSpeech.VERB.value:  # Verbs
-            print "Inserting verb"
-            return self.__insert_verb_form(word) if is_form else self.__insert_verb(word, form)
+            return self.__insert_verb_form(form) if word is None else self.__insert_verb(word, form)
         elif pos == Utils.PartOfSpeech.ADJECTIVE.value:  # Adjectives
-            print "Inserting adjective"
-            return self.__insert_adj_form(word) if is_form else self.__insert_adj(word, form)
+            return self.__insert_adj_form(form) if word is None else self.__insert_adj(word, form)
         elif pos == Utils.PartOfSpeech.PRONOUN.value:  # Pronouns
-            print "Inserting pronoun"
-            return self.__insert_pronoun_form(word) if is_form else self.__insert_pronoun(word, form)
+            return self.__insert_pronoun_form(form) if word is None else self.__insert_pronoun(word, form)
         elif pos == Utils.PartOfSpeech.PARTICIPLE.value:
-            print "Inserting participle"
-            return False if is_form else self.__insert_participle(word, form)
+            return False if word is None else self.__insert_participle(word, form)
         else:  # Others
             print "Inserting other words"
+        return True
 
+    # Select the info of a word
+    def select(self, word, is_verbose=False, is_define=False, is_unaccented=False):
+        """
+        Search the database for the word's info
+        :param word: Word to query
+        :param is_verbose: Whether to only give form info, or full info
+        :param is_define: Whether to include definitions
+        :param is_unaccented: Whether the word is unaccented or not (This is useful for enclitics, or words in sentences with enclitics
+        :return: Info, Form, Definitions - each of which are lists
+        """
+        cur = self.__conn.cursor()
+
+        # Get the Word ID, Form ID Part of word
+        cur.execute("SELECT WordID, FormID, PartOfSpeech FROM " + self.WORD_TABLE + " WHERE " +
+                    self.WORD_TABLE + (".UnaccentedWordName" if is_unaccented else ".WordName") +
+                    " == '" + word + "';")
+        ids = cur.fetchone()  # If there is more than one, then there is something wrong (THIS PAIR SHOULD BE UNIQUE)
+        if ids is None:  # If there was no match, word cannot be found
+            return None, None, None
+
+        word_id = ids[0]; form_id = ids[1]; part = ids[2]
+
+        info = None; form = None; defs = None
+
+        table = ""; form_table = ""
+        # Switch to see which Table to look at:
+        if part == Utils.PartOfSpeech.VERB.value:
+            table = self.VERB_TABLE
+            form_table = self.VERB_FORM_TABLE
+        elif part == Utils.PartOfSpeech.NOUN.value:
+            table = self.NOUN_TABLE
+            form_table = self.NOUN_FORM_TABLE
+        elif part == Utils.PartOfSpeech.ADJECTIVE.value:
+            table = self.ADJ_TABLE
+            form_table = self.ADJ_FORM_TABLE
+        elif part == Utils.PartOfSpeech.PRONOUN.value:
+            table = self.PRO_TABLE
+            form_table = self.PRO_FORM_TABLE
+        elif part == Utils.PartOfSpeech.PARTICIPLE.value:
+            table = self.PART_TABLE
+            form_table = self.VERB_FORM_TABLE
+        else:
+            print "MISC TABLE"
+        # Get the INFO for that word from the table
+        cur.execute("SELECT * FROM " + table + " WHERE " +
+                    table + ".WordID == " + str(word_id) + " AND " +
+                    table + ".FormID == " + str(form_id) + ";")
+        info = cur.fetchone()[2:]  # Again, there should ONLY be ONE.
+        #  Ignore the first two (word id and form id)
+
+        # Get Form if verbose
+        if is_verbose:
+            cur.execute("SELECT * FROM " + form_table + " WHERE " +
+                        form_table + ".FormID == " + str(form_id) + ";")
+            form = cur.fetchone()[1:] # Ignore the first column (first id)
+
+        if is_define:
+            cur.execute("SELECT Definition FROM " + self.DEF_TABLE + " WHERE " +
+                        self.DEF_TABLE + ".FormID == " + str(form_id) + ";")
+            defs = cur.fetchall()  # There can be more than one
+
+        return info, form, defs
+
+        # Look up the word in Words (If unaccented, look at unaccented column instead)
+        # Get WordID, FormID, and PartOfSpeech
+        # Based on PartOfSpeech, look at relevant table
+        # Get All from relevant word table (not form table) by matching wordID and formID
+        # If verbose, then look at relevant form table, and select everything by matching formID + Chapter from WordForms
+        # If define, then look at definitions table, and select everything by matching formID
+        # return the triple: Info from Word Table, Form from Verbose, Defs from Define
+
+    # Insert Helper Methods
+    # Insert a Noun
     def __insert_noun(self, noun, form):
-        # Noun is a container that holds everything...
-        # It is a list, where each index is an info parameter
-        # So it has:
-            # 0: Word String
-            # 1: Case
-            # 2: Number
-            # 3: Gender
-
+        """
+        Insert a Noun
+        :param noun: Noun - list that contains word info
+        :param form: Noun Form list
+        :return: Success
+        """
         # Check if the Word Form exists --This must exist, or else fail
         form_id = self.__get_form_id(form, Utils.PartOfSpeech.NOUN)
         if form_id is None:
             return False
 
-        # Get the next local ID (the max value of local IDs for the Form ID
-        word_id = self.__get_local_id(form_id)
+        # Insert every Noun:
+        for n, l in noun.iteritems():
+            for i in l:
+                # Get the next local ID
+                word_id = self.__get_local_id(form_id)
 
-        # Insert into Words --Name, Local Id, Form Id, Part of Speech
-        self.__sql_insert_words(noun[0], word_id, form_id, Utils.PartOfSpeech.NOUN)
+                # Insert
+                self.__sql_insert_words(n, word_id, form_id, Utils.PartOfSpeech.NOUN)
+                self.__sql_insert_nouns(word_id, form_id, i[0], i[1], i[2])
 
-        # Insert into Nouns -- Local ID, Form ID, 1, 2, 3 of Noun[]
-        self.__sql_insert_nouns(word_id, form_id, noun[1], noun[2], noun[3])
         self.__conn.commit()
         return True
 
+    # Insert a Noun Form
     def __insert_noun_form(self, noun):
-        # Noun has:
-            # 0: Nominative Word
-            # 1: Genitive Word
-            # 2: Article
-            # 3: Gender
-            # 4: Major Declension
-            # 5: Minor Declension
-            # 6: Irregularity
-            # 7: Definitions
+        """
+        Insert a Noun Form
+        :param noun: Noun Form
+        :return: Success
+        """
 
         # Check if the Word Form exists --it shouldn't exist or else we are re-adding
         form_id = self.__get_form_id(noun[:3], Utils.PartOfSpeech.NOUN)
@@ -116,56 +214,51 @@ class Lexicon:
         form_id = self.__get_next_form_id()
 
         # Insert into WordForms --FormID, pos
-        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.NOUN)
+        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.NOUN, noun[7])
 
         # Insert into NounForms --Nominative, Genitive, Article, Gender, Dec, Dec2, Irr
         self.__sql_insert_noun_forms(form_id, noun[0], noun[1], noun[2], noun[3], noun[4], noun[5], noun[6])
 
         # Insert into Definitions
-        definitions = noun[7]
+        definitions = noun[8:]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
+
         self.__conn.commit()
         return True
 
+    # Insert a Verb
     def __insert_verb(self, verb, form):
-        # Verb has:
-            # 0: Word String
-            # 1: Person
-            # 2: Number
-            # 3: Tense
-            # 4: Voice
-            # 5: Mood
-
+        """
+        Insert a Verb
+        :param verb: Verb Words
+        :param form: Verb Form
+        :return: Success
+        """
         # Check if word form exists
         form_id = self.__get_form_id(form, Utils.PartOfSpeech.VERB)
         if form_id is None:
             return False
 
-        for v, i in verb.iteritems():
-            # Get next local ID
+        for v, l in verb.iteritems():
+            for i in l:
+                # Get next local ID
+                word_id = self.__get_local_id(form_id)
 
-            word_id = self.__get_local_id(form_id)
-            self.__sql_insert_words(v, word_id, form_id, Utils.PartOfSpeech.VERB)
-            self.__sql_insert_verbs(word_id, form_id, i[0], i[1], i[2], i[3], i[4])
+                # Insert
+                self.__sql_insert_words(v, word_id, form_id, Utils.PartOfSpeech.VERB)
+                self.__sql_insert_verbs(word_id, form_id, i[0], i[1], i[2], i[3], i[4])
+
         self.__conn.commit()
         return True
 
+    # Insert Verb Form
     def __insert_verb_form(self, verb):
-        # Verb Form has:
-            # 0: First
-            # 1: Second
-            # 2: Third
-            # 3: Fourth
-            # 4: Fifth
-            # 5: Sixth
-            # 6: Ending Type
-            # 7: Contraction Type
-            # 8: Aorist Type
-            # 9: Perfect Type
-            # 10: Irregularity
-            # 11: Definitions
-
+        """
+        Insert a Verb Form
+        :param verb: Verb Form
+        :return: Success
+        """
         # Check if word form exists
         form_id = self.__get_form_id(verb[:6], Utils.PartOfSpeech.VERB)
         if form_id is not None:
@@ -182,44 +275,46 @@ class Lexicon:
                                      verb[9], verb[10], verb[11])
 
         # Insert into Definitions
-        definitions = verb[11]
+        definitions = verb[13:]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
+
         self.__conn.commit()
         return True
 
+    # Insert Adjective
     def __insert_adj(self, adj, form):
-        # Adj has:
-            # 0: Word String
-            # 1: Case
-            # 2: Number
-            # 3: Gender
+        """
+        Insert an Ajdective
+        :param adj: Adjectives
+        :param form: Adj Form
+        :return: Success
+        """
 
         # Check for Word Form
         form_id = self.__get_form_id(form, Utils.PartOfSpeech.ADJECTIVE)
         if form_id is None:
             return False
 
-        # Get next local ID
-        word_id = self.__get_local_id(form_id)
+        for a, l in adj.iteritems():
+            for i in l:
+                # Get next local ID
+                word_id = self.__get_local_id(form_id)
 
-        # Insert into Words
-        self.__sql_insert_words(adj[0], word_id, form_id, Utils.PartOfSpeech.ADJECTIVE)
+                # Insert
+                self.__sql_insert_words(a, word_id, form_id, Utils.PartOfSpeech.ADJECTIVE)
+                self.__sql_insert_adj(word_id, form_id, i[0], i[1], i[2])
 
-        # Insert into Adjectives
-        self.__sql_insert_adj(word_id, form_id, adj[1], adj[2], adj[3])
         self.__conn.commit()
         return True
 
+    # Insert Adjective Form
     def __insert_adj_form(self, adj):
-        # Adj Form has:
-            # 0: Masculine
-            # 1: Feminine
-            # 2: Neuter
-            # 3: Major
-            # 4: Minor
-            # 5: Irregularity
-            # 6: Definitions
+        """
+        Insert an Adjective Form
+        :param adj: Adj Form
+        :return: Success
+        """
 
         # Check for Word Form
         form_id = self.__get_form_id(adj[:3], Utils.PartOfSpeech.ADJECTIVE)
@@ -230,50 +325,52 @@ class Lexicon:
         form_id = self.__get_next_form_id()
 
         # Insert into Word Forms
-        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.ADJECTIVE)
+        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.ADJECTIVE, adj[6])
 
         # Insert into Adj Forms
-        self.__sql_insert_adj_forms(form_id, adj[1], adj[2], adj[3], adj[4], adj[5], adj[6])
+        self.__sql_insert_adj_forms(form_id, adj[0], adj[1], adj[2], adj[3], adj[4], adj[5])
 
         # Insert into Definitions
-        definitions = adj[7]
+        definitions = adj[7:]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
+
         self.__conn.commit()
         return True
 
+    # Insert Pronoun
     def __insert_pronoun(self, pro, form):
-        # Pronoun
-            # 0: Word String
-            # 1: Case
-            # 2: Number
-            # 3: Gender
-            # 4: Person
+        """
+        Insert Pronoun
+        :param pro: Pronouns
+        :param form: P Form
+        :return: Success
+        """
 
         # Check for Word Form
         form_id = self.__get_form_id(form, Utils.PartOfSpeech.PRONOUN)
         if form_id is None:
             return False
 
-        # Get next local ID
-        word_id = self.__get_local_id(form_id)
+        for p, l in pro.iteritems():
+            for i in l:
+                # Get next local ID
+                word_id = self.__get_local_id(form_id)
 
-        # Insert into Words
-        self.__sql_insert_words(pro[0], word_id, form_id, Utils.PartOfSpeech.PRONOUN)
+                # Insert
+                self.__sql_insert_words(p, word_id, form_id, Utils.PartOfSpeech.PRONOUN)
+                self.__sql_insert_pro(word_id, form_id, i[0], i[1], i[2], i[3])
 
-        # Insert into Adjectives
-        self.__sql_insert_pro(word_id, form_id, pro[1], pro[2], pro[3], pro[4])
         self.__conn.commit()
         return True
 
+    # Insert Pronoun Form
     def __insert_pronoun_form(self, pro):
-        # Pronoun Form
-            # 0: Masculine
-            # 1: Feminine
-            # 2: Neuter
-            # 3: Person
-            # 4: Type
-            # 5: Definitions
+        """
+        Insert P Form
+        :param pro: P Form
+        :return: Success
+        """
 
         # Check for Word Form
         form_id = self.__get_form_id(pro[:3], Utils.PartOfSpeech.PRONOUN)
@@ -284,73 +381,91 @@ class Lexicon:
         form_id = self.__get_next_form_id()
 
         # Insert into Word Forms
-        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.PRONOUN)
+        self.__sql_insert_word_forms(form_id, Utils.PartOfSpeech.PRONOUN, pro[5])
 
-        # Insert into Adj Forms
-        self.__sql_insert_pro_forms(form_id, pro[1], pro[2], pro[3], pro[4])
+        # Insert into Pro Forms
+        self.__sql_insert_pro_forms(form_id, pro[0], pro[1], pro[2], pro[3], pro[4])
 
         # Insert into Definitions
-        definitions = pro[5]
+        definitions = pro[6:]
         for d in definitions:
             self.__sql_insert_definition(form_id, d)
+
         self.__conn.commit()
         return True
 
+    # Insert Participle
     def __insert_participle(self, part, form):
-        # Participle
-            # 0: Word String
-            # 1: Case
-            # 2: Number
-            # 3: Gender
-            # 4: Tense
-            # 5: Voice
+        """
+        Insert Participle
+        :param part: Participle
+        :param form: Verb Form (Remember Participles are formed from Verbs)
+        :return: Success
+        """
 
         # Check for Word Form
         form_id = self.__get_form_id(form, Utils.PartOfSpeech.PARTICIPLE)
         if form_id is None:
             return False
 
-        # Get next local ID
-        word_id = self.__get_local_id(form_id)
+        for p, l in part.iteritems():
+            for i in l:
+                # Get next local ID
+                word_id = self.__get_local_id(form_id)
 
-        # Insert into Words
-        self.__sql_insert_words(part[0], word_id, form_id, Utils.PartOfSpeech.PARTICIPLE)
+                # Insert into Words
+                self.__sql_insert_words(p, word_id, form_id, Utils.PartOfSpeech.PARTICIPLE)
 
-        # Insert into Adjectives
-        self.__sql_insert_part(word_id, form_id, part[1], part[2], part[3], part[4], part[5])
+                # Insert into Participles
+                self.__sql_insert_part(word_id, form_id, i[0], i[1], i[2], i[3], i[4])
+
         self.__conn.commit()
         return True
 
     # Select Query Helpers
-    # Form ID Select Methods
+    # Form ID Select Method
     def __get_form_id(self, form, pos):
+        """
+        Gets the Form ID of the form
+        :param form: Form
+        :param pos: Part of Speech
+        :return: Form ID
+        """
         if pos == Utils.PartOfSpeech.NOUN:  # Nouns
-            print "Get Form ID of a noun"
             return self.__get_form_id_noun(form)
         elif pos == Utils.PartOfSpeech.VERB:  # Verbs
-            print "Get Form ID of a verb"
             return self.__get_form_id_verb(form)
         elif pos == Utils.PartOfSpeech.ADJECTIVE:  # Adjectives
-            print "Get Form ID of an adjective"
             return self.__get_form_id_adj(form)
         elif pos == Utils.PartOfSpeech.PRONOUN:  # Pronouns
-            print "Get Form ID of a pronoun"
             return self.__get_form_id_pro(form)
         else:  # Others
             print "Get Form ID of another word"
 
+    # Form ID of Noun
     def __get_form_id_noun(self, form):
+        """
+        Get Form ID of Noun
+        :param form: N Form
+        :return: ID or None
+        """
         cur = self.__conn.cursor()
-        cur.execute("SELECT * FROM " + self.NOUN_FORM_TABLE + " WHERE " +
-                    self.NOUN_FORM_TABLE + ".Nominative == " + form[0] + " AND " +
-                    self.NOUN_FORM_TABLE + ".Genitive == " + form[1] + " AND " +
-                    self.NOUN_FORM_TABLE + ".Article == " + form[2] + ";")
+        cur.execute("SELECT FormID FROM " + self.NOUN_FORM_TABLE + " WHERE " +
+                    self.NOUN_FORM_TABLE + ".Nominative == '" + form[0] + "' AND " +
+                    self.NOUN_FORM_TABLE + ".Genitive == '" + form[1] + "' AND " +
+                    self.NOUN_FORM_TABLE + ".Article == '" + form[2] + "';")
         data = cur.fetchone()  # There should be only one form or None
         return data[0] if data is not None else None
 
+    # Form ID of Verb
     def __get_form_id_verb(self, form):
+        """
+        Get Form ID of Verb
+        :param form: V Form
+        :return: ID or None
+        """
         cur = self.__conn.cursor()
-        cur.execute("SELECT * FROM " + self.VERB_FORM_TABLE + " WHERE " +
+        cur.execute("SELECT FormID FROM " + self.VERB_FORM_TABLE + " WHERE " +
                     self.VERB_FORM_TABLE + ".FirstPrincipalPart == '" + form[0] + "' AND " +
                     self.VERB_FORM_TABLE + ".SecondPrincipalPart == '" + form[1] + "' AND " +
                     self.VERB_FORM_TABLE + ".ThirdPrincipalPart == '" + form[2] + "' AND " +
@@ -360,26 +475,43 @@ class Lexicon:
         data = cur.fetchone()  # There should be only one form or None
         return data[0] if data is not None else None
 
+    # Form ID of Adj
     def __get_form_id_adj(self, form):
+        """
+        Get Form ID of Adj
+        :param form: A Form
+        :return: ID or None
+        """
         cur = self.__conn.cursor()
         cur.execute("SELECT * FROM " + self.ADJ_FORM_TABLE + " WHERE " +
-                    self.ADJ_FORM_TABLE + ".Masculine == " + form[0] + " AND " +
-                    self.ADJ_FORM_TABLE + ".Feminine == " + form[1] + " AND " +
-                    self.ADJ_FORM_TABLE + ".Neuter == " + form[2] + ";")
+                    self.ADJ_FORM_TABLE + ".Masculine == '" + form[0] + "' AND " +
+                    self.ADJ_FORM_TABLE + ".Feminine == '" + form[1] + "' AND " +
+                    self.ADJ_FORM_TABLE + ".Neuter == '" + form[2] + "';")
         data = cur.fetchone()  # There should be only one form or None
         return data[0] if data is not None else None
 
+    # Form ID of Pronoun
     def __get_form_id_pro(self, form):
+        """
+        Get Form ID of Pro
+        :param form: P Form
+        :return: ID or None
+        """
         cur = self.__conn.cursor()
         cur.execute("SELECT * FROM " + self.PRO_FORM_TABLE + " WHERE " +
-                    self.PRO_FORM_TABLE + ".Masculine == " + form[0] + " AND " +
-                    self.PRO_FORM_TABLE + ".Feminine == " + form[1] + " AND " +
-                    self.PRO_FORM_TABLE + ".Neuter == " + form[2] + ";")
+                    self.PRO_FORM_TABLE + ".Masculine == '" + form[0] + "' AND " +
+                    self.PRO_FORM_TABLE + ".Feminine == '" + form[1] + "' AND " +
+                    self.PRO_FORM_TABLE + ".Neuter == '" + form[2] + "';")
         data = cur.fetchone()  # There should be only one form or None
         return data[0] if data is not None else None
 
     # Word ID Select Method
     def __get_local_id(self, form_id):
+        """
+        Get the next Word ID of a form
+        :param form_id: Form ID
+        :return: Word ID or 0 (if there are no words for that form yet)
+        """
         cur = self.__conn.cursor()
         cur.execute("SELECT MAX(WordID) FROM " + self.WORD_TABLE + " WHERE " +
                     self.WORD_TABLE + ".FormID == " + str(form_id) + ";")
@@ -388,19 +520,39 @@ class Lexicon:
 
     # Next Form ID Select Method
     def __get_next_form_id(self):
+        """
+        Get the next Form ID
+        :return: Form ID or 0 (if there are no forms yet)
+        """
         cur = self.__conn.cursor()
         cur.execute("SELECT MAX(FormID) FROM " + self.WORD_FORM_TABLE + ";")
         data = cur.fetchone()
         return (data[0] + 1) if data[0] is not None else 0
 
     # SQL Insert Methods
+    # Insert Definition SQLite
     def __sql_insert_definition(self, form_id, definition):
+        """
+        Executes an SQLite insert query for definitions
+        :param form_id: Form
+        :param definition: Defs
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.DEF_TABLE + " VALUES( " +
                     str(form_id) + ", '" +
                     definition + "');")
 
+    # Insert Word SQLite
     def __sql_insert_words(self, name, word_id, form_id, pos):
+        """
+        Executes an SQLite insert query for words
+        :param name: Word String Name
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param pos: Part of Speech
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.WORD_TABLE + " VALUES( " +
                     str(word_id) + ", " +
@@ -409,16 +561,38 @@ class Lexicon:
                     name + "', '" +
                     self.__deaccentuate(name) + "');")
 
+    # Insert Noun SQLite
     def __sql_insert_nouns(self, word_id, form_id, case, number, gender):
+        """
+        Executes an SQLite insert query for nouns
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param case: Case
+        :param number: Number
+        :param gender: Gender
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.NOUN_TABLE + " VALUES( " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    case + ", " +
-                    number + ", " +
-                    gender + ");")
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    case + "', '" +
+                    number + "', '" +
+                    gender + "');")
 
+    # Insert Verbs SQLite
     def __sql_insert_verbs(self, word_id, form_id, person, number, tense, voice, mood):
+        """
+        Executes an SQLite insert query for verbs
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param person: Person
+        :param number: Number
+        :param tense: Tense
+        :param voice: Voice
+        :param mood: Mood
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.VERB_TABLE + " VALUES( " +
                     str(word_id) + ", " +
@@ -429,58 +603,130 @@ class Lexicon:
                     voice + "', '" +
                     mood + "');")
 
+    # Insert Adj SQLite
     def __sql_insert_adj(self, word_id, form_id, case, number, gender):
+        """
+        Executes an SQLite insert query for adj
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param case: Case
+        :param number: Number
+        :param gender: Gender
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.ADJ_TABLE + " VALUES( " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    case + ", " +
-                    number + ", " +
-                    gender + ");")
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    case + "', '" +
+                    number + "', '" +
+                    gender + "');")
 
-    def __sql_insert_pro(self, word_id, form_id, case, number, gender, person, kind):
+    # Insert Pro SQLite
+    def __sql_insert_pro(self, word_id, form_id, case, number, gender, person):
+        """
+        Executes an SQLite insert query for pros
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param case: Case
+        :param number: Number
+        :param gender: Gender
+        :param person: Person
+        :return: None
+        """
         cur = self.__conn.cursor()
-        cur.execute("INSERT INTO " + self.VERB_TABLE + " VALUES( " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    case + ", " +
-                    number + ", " +
-                    gender + ", " +
-                    person + ", " +
-                    kind + ", " + ");")
+        cur.execute("INSERT INTO " + self.PRO_TABLE + " VALUES( " +
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    case + "', '" +
+                    number + "', '" +
+                    gender + "', '" +
+                    person + "');")
 
+    # Insert Part SQLite
     def __sql_insert_part(self, word_id, form_id, case, number, gender, tense, voice):
+        """
+        Executes an SQLite insert query for participles
+        :param word_id: Word ID
+        :param form_id: Form ID
+        :param case: Case
+        :param number: Number
+        :param gender: Gender
+        :param tense: Tense
+        :param voice: Voice
+        :return: None
+        """
         cur = self.__conn.cursor()
-        cur.execute("INSERT INTO " + self.VERB_TABLE + " VALUES( " +
-                    word_id + ", " +
-                    form_id + ", " +
-                    case + ", " +
-                    number + ", " +
-                    gender + ", " +
-                    tense + ", " +
-                    voice + ", " + ");")
+        cur.execute("INSERT INTO " + self.PART_TABLE + " VALUES( " +
+                    str(word_id) + ", " +
+                    str(form_id) + ", '" +
+                    case + "', '" +
+                    number + "', '" +
+                    gender + "', '" +
+                    tense + "', '" +
+                    voice + "');")
 
+    # Insert Word Forms
     def __sql_insert_word_forms(self, form_id, pos, c):
+        """
+        Executes an SQLite insert query for word forms
+        :param form_id: Form ID
+        :param pos: Part of Speech
+        :param c: Chapter
+        :return: None
+        """
         cur = self.__conn.cursor()
-
         cur.execute("INSERT INTO " + self.WORD_FORM_TABLE + " VALUES( " +
                     str(form_id) + ", '" +
                     pos.value + "', " +
                     str(c) + ");")
 
+    # Insert Noun Forms
     def __sql_insert_noun_forms(self, form_id, nominative, genitive, article, gender, major, minor, irr):
+        """
+        Executes an SQLite insert query for noun forms
+        :param form_id: Form ID
+        :param nominative: N
+        :param genitive: G
+        :param article: A
+        :param gender: Gender
+        :param major: Major
+        :param minor: Minor
+        :param irr: Irregular
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.NOUN_FORM_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    nominative + ", " +
-                    genitive + ", " +
-                    article + ", " +
-                    gender + ", " +
-                    major + ", " +
-                    minor + ", " +
-                    irr + ");")
+                    str(form_id) + ", '" +
+                    nominative + "', '" +
+                    genitive + "', '" +
+                    article + "', '" +
+                    gender + "', '" +
+                    major + "', '" +
+                    minor + "', '" +
+                    irr + "');")
 
-    def __sql_insert_verb_forms(self, form_id, first, second, third, fourth, fifth, sixth, ending, contract, aorist, perfect, deponent, irr):
+    # Insert Verb Forms
+    def __sql_insert_verb_forms(self, form_id, first, second,
+                                third, fourth, fifth, sixth,
+                                ending, contract, aorist, perfect, deponent, irr):
+        """
+        Executes an SQLite insert query for verb forms
+        :param form_id: Form ID
+        :param first: Principal Part
+        :param second: Principal Part
+        :param third: Principal Part
+        :param fourth: Principal Part
+        :param fifth: Principal Part
+        :param sixth: Principal Part
+        :param ending: Ω or μι ending
+        :param contract: Whether the verb contracts in the Present, Imperfect, Future
+        :param aorist: Whether the verb uses First Aorist or Second Aorist endings
+        :param perfect: Whether the verb uses κ or not
+        :param deponent: Whether the verb is deponent in one or more of its forms
+        :param irr: Whether the verb conjugates regularly
+        :return: None
+        """
         cur = self.__conn.cursor()
         cur.execute("INSERT INTO " + self.VERB_FORM_TABLE + " VALUES( '" +
                     str(form_id) + "', '" +
@@ -497,29 +743,75 @@ class Lexicon:
                     deponent + "', '" +
                     irr + "');")
 
+    # Insert Adj Forms
     def __sql_insert_adj_forms(self, form_id, masculine, feminine, neuter, major, minor, irr):
+        """
+        Executes an SQLite query to insert adj form
+        :param form_id: Form ID
+        :param masculine: M
+        :param feminine: F
+        :param neuter: N
+        :param major: Declension
+        :param minor: Subgroup
+        :param irr: Irregularity
+        :return: None
+        """
         cur = self.__conn.cursor()
-        cur.execute("INSERT INTO " + self.NOUN_FORM_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    masculine + ", " +
-                    feminine + ", " +
-                    neuter + ", " +
-                    major + ", " +
-                    minor + ", " +
-                    irr + ");")
+        cur.execute("INSERT INTO " + self.ADJ_FORM_TABLE + " VALUES( " +
+                    str(form_id) + ", '" +
+                    masculine + "', '" +
+                    feminine + "', '" +
+                    neuter + "', '" +
+                    major + "', '" +
+                    minor + "', '" +
+                    irr + "');")
 
-    def __sql_insert_pro_forms(self, form_id, masculine, feminine, neuter, person, irr):
+    # Insert Pronoun Forms
+    def __sql_insert_pro_forms(self, form_id, masculine, feminine, neuter, person, kind):
+        """
+        Executes an SQLite query to insert pro forms
+        :param form_id: Form ID
+        :param masculine: M
+        :param feminine: F
+        :param neuter: N
+        :param person: 1, 2, 3
+        :param kind: type of pronoun
+        :return:None
+        """
         cur = self.__conn.cursor()
-        cur.execute("INSERT INTO " + self.NOUN_FORM_TABLE + " VALUES( " +
-                    form_id + ", " +
-                    masculine + ", " +
-                    feminine + ", " +
-                    neuter + ", " +
-                    person + ", " +
-                    irr + ");")
+        cur.execute("INSERT INTO " + self.PRO_FORM_TABLE + " VALUES( " +
+                    str(form_id) + ", '" +
+                    masculine + "', '" +
+                    feminine + "', '" +
+                    neuter + "', '" +
+                    person + "', '" +
+                    kind + "');")
 
+    # Deaccentuate a word (Remove accents and breathing marks)
     def __deaccentuate(self, word):
-        return word # Change each accented (including breathing marks) letters into unaccented versions. If there is a standalone accent, leave as is
+        """
+        This removes accents and breathing marks above letters.
+        This does not remove isolated accents.
+        :param word: The word to deaccentuate
+        :return: Deaccentuated word
+        """
+        unaccented = ""
+        for i in range(len(word)):  # Loop through each character
+            unaccented += self.__deaccentuate_char(word[i])
+        return unaccented
+
+    # Deaccentuate a character (Get an unaccented version of the character)
+    def __deaccentuate_char(self, ch):
+        for a, u in self.ACCENT_MAP.iteritems():
+            if self.__find_unicode(a, ch) >= 0:
+                return u
+        return ch
+
+    def __find_unicode(self, s, c):
+        for i in range(len(s)):
+            if s[i] == c:
+                return i
+        return -1
 
 # Old Handler Class
 # Here for reference
